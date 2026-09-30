@@ -29,7 +29,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "test": "node --experimental-strip-types --test tests/domain.test.mjs tests/auth.test.mjs tests/weeklyProgress.test.mjs",
-    "test:database": "node --test tests/weeklyInitialization.database.test.mjs",
+    "test:database": "node --test --test-concurrency=1 tests/weeklyInitialization.database.test.mjs tests/revealScheduling.database.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "private": true

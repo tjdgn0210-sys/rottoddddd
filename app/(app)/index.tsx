@@ -6,9 +6,12 @@ import { DEFAULT_CHARACTER } from '@/domain/characters';
 import { fetchCurrentWeeklyProgress, fetchUserProfile, type UserProfile, type WeeklyProgress } from '@/data/weeklyRepository';
 import { getBackendConfigurationMessage } from '@/lib/supabase';
 import { useAuth } from '@/components/AuthProvider';
+import { useRevealStatus } from '@/components/useRevealStatus';
+import { formatPublicRevealWindow } from '@/domain/weeklyProgress';
 
 export default function HomeScreen() {
   const { user, signOut } = useAuth();
+  const revealStatus = useRevealStatus();
   const configurationMessage = getBackendConfigurationMessage();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [progress, setProgress] = useState<WeeklyProgress | null>(null);
@@ -42,16 +45,18 @@ export default function HomeScreen() {
     finally { setSigningOut(false); }
   };
 
-  const todayReveal = progress?.reveals.find((reveal) => reveal.dayIndex === progress.currentDayIndex);
+  const todayReveal = revealStatus.status?.reveal;
   return (
     <AppShell title="이번 주의 기록">
       <View style={cardStyle}>
-        <Text style={styles.day}>{progress ? (progress.currentDayIndex ? `DAY ${progress.currentDayIndex} / 6` : 'SUNDAY · WAITING') : weeklyLoading ? '주간 기록 준비 중…' : '주간 기록 확인 필요'}</Text>
+        <Text style={styles.day}>{revealStatus.status ? (revealStatus.status.currentDayIndex ? `DAY ${revealStatus.status.currentDayIndex} / 6` : 'SUNDAY · WAITING') : weeklyLoading ? '주간 기록 준비 중…' : '주간 기록 확인 필요'}</Text>
         {progress && <Text style={mutedStyle}>이번 주 · {progress.weekStart} 시작</Text>}
         <Text style={textStyle}>주간 상태 · {progress?.submissionStatus ?? '기록 없음'}</Text>
-        <Text style={mutedStyle}>오늘 공개 상태 · {todayReveal?.state ?? (progress?.currentDayIndex === null ? '일요일 대기' : '—')}</Text>
-        <Text style={mutedStyle}>오늘 공개 가능 여부 · 공개 요청 시 서버가 확인</Text>
-        <Text style={mutedStyle}>다음 공개까지 · 시간표 연동 전</Text>
+        <Text style={mutedStyle}>오늘 공개 상태 · {todayReveal?.state ?? (revealStatus.status?.currentDayIndex === null ? '일요일 대기' : '확인 중')}</Text>
+        {todayReveal && <Text style={mutedStyle}>오늘의 공개 범위 · {formatPublicRevealWindow(todayReveal)}</Text>}
+        <Text style={mutedStyle}>공개가 시작되면 5분 동안 한 번 확인할 수 있습니다.</Text>
+        {revealStatus.error && <Text style={mutedStyle}>{revealStatus.error}</Text>}
+        <Pressable accessibilityRole="button" onPress={() => void revealStatus.refresh()}><Text style={mutedStyle}>공개 상태 새로고침</Text></Pressable>
       </View>
       <View style={cardStyle}>
         <Text style={mutedStyle}>{user?.email}</Text>

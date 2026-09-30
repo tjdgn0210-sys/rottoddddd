@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFile, mkdtemp } from 'node:fs/promises';
+import { readFile, mkdtemp, rm } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { resolve, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import net from 'node:net';
+import { useGracefulWindowsShutdown } from './helpers/localDatabase.mjs';
 
 // Deliberately starts a fresh loopback cluster: never accepts a remote DB URL.
 // Install the test-only runtime as documented in supabase/TESTING.md.
@@ -20,7 +21,7 @@ test('weekly initialization on temporary PostgreSQL', async (t) => {
   const databaseDir = await mkdtemp(resolve('.expo/weekly-sql-tests/cluster-'));
   assert.ok(databaseDir.startsWith(resolve('.expo/weekly-sql-tests') + (process.platform === 'win32' ? '\\' : '/')));
   const pg = new EmbeddedPostgres({ databaseDir, port, user: 'postgres', password: randomUUID(),
-    persistent: false, postgresFlags: ['-h', '127.0.0.1'], onLog: () => {}, onError: () => {} });
+    persistent: true, postgresFlags: ['-h', '127.0.0.1'], onLog: () => {}, onError: () => {} });
   const clients = [];
   let started = false;
   async function connect(userId, role = 'authenticated') {
@@ -33,6 +34,7 @@ test('weekly initialization on temporary PostgreSQL', async (t) => {
   }
   try {
     await pg.initialise(); await pg.start(); started = true;
+    await useGracefulWindowsShutdown(pg, databaseDir, runtime);
     const admin = await connect(null, null);
     await admin.query(`
       create role anon; create role authenticated; create role service_role;
@@ -151,5 +153,7 @@ test('weekly initialization on temporary PostgreSQL', async (t) => {
   } finally {
     await Promise.allSettled(clients.map((client) => client.end()));
     if (started) await pg.stop();
+    // Windows may briefly retain file handles after PostgreSQL stops.
+    await rm(databaseDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });

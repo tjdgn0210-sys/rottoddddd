@@ -1,5 +1,5 @@
 import type { SubmissionOutcome } from '@/domain/weekly';
-import { parseWeeklyProgress, type WeeklyProgress } from '@/domain/weeklyProgress';
+import { parseWeeklyProgress, parseCurrentRevealStatus, type CurrentRevealStatus, type WeeklyProgress } from '@/domain/weeklyProgress';
 export type { DailyRevealProgress, WeeklyProgress } from '@/domain/weeklyProgress';
 import { getSupabaseClient } from '@/lib/supabase';
 
@@ -58,6 +58,13 @@ export async function consumeDailyReveal(): Promise<number | null> {
     throw new Error('공개 응답이 올바르지 않습니다.');
   }
   return data;
+}
+
+export async function fetchCurrentRevealStatus(): Promise<CurrentRevealStatus> {
+  const client = await authenticatedClient();
+  const { data, error } = await client.rpc('get_current_reveal_status');
+  if (error) throw new Error('공개 상태를 확인하지 못했습니다. 인터넷 연결을 확인하고 다시 시도하세요.');
+  return parseCurrentRevealStatus(data);
 }
 
 export async function submitWeeklyNumbers(numbers: readonly number[]): Promise<FinalSubmissionResult> {
