@@ -1,26 +1,12 @@
-import type { SubmissionOutcome, RevealState } from '@/domain/weekly';
-import { getWeeklyCalendarContext } from '@/domain/weekly';
+import type { SubmissionOutcome } from '@/domain/weekly';
+import { parseWeeklyProgress, type WeeklyProgress } from '@/domain/weeklyProgress';
+export type { DailyRevealProgress, WeeklyProgress } from '@/domain/weeklyProgress';
 import { getSupabaseClient } from '@/lib/supabase';
 
 export interface UserProfile {
   pointBalance: number;
   currentSuccessStreak: number;
   totalSuccessfulWeeks: number;
-}
-
-export interface DailyRevealProgress {
-  dayIndex: number;
-  state: RevealState;
-  availableAt: string;
-  expiresAt: string;
-  consumedAt: string | null;
-}
-
-export interface WeeklyProgress {
-  weekStart: string;
-  submissionStatus: 'PENDING' | SubmissionOutcome;
-  submittedAt: string | null;
-  reveals: DailyRevealProgress[];
 }
 
 export interface FinalSubmissionResult {
@@ -51,30 +37,16 @@ export async function fetchUserProfile(): Promise<UserProfile> {
   };
 }
 
-export async function fetchCurrentWeeklyProgress(): Promise<WeeklyProgress | null> {
+export async function ensureCurrentWeek(): Promise<WeeklyProgress> {
   const client = await authenticatedClient();
-  const weekStart = getWeeklyCalendarContext(new Date()).weekStartsOn;
-  const { data: cycle, error: cycleError } = await client.from('weekly_cycles')
-    .select('week_start,submission_status,submitted_at').eq('week_start', weekStart).maybeSingle();
-  if (cycleError) throw new Error('주간 기록을 불러오지 못했습니다. 잠시 후 다시 시도하세요.');
-  if (!cycle) return null;
+  const { data, error } = await client.rpc('ensure_current_week');
+  if (error) throw new Error('주간 기록을 준비하지 못했습니다. 인터넷 연결과 서버 설정을 확인하고 다시 시도하세요.');
+  return parseWeeklyProgress(data);
+}
 
-  const { data: reveals, error: revealsError } = await client.from('daily_reveals')
-    .select('day_index,state,available_at,expires_at,consumed_at')
-    .eq('week_start', weekStart).order('day_index');
-  if (revealsError) throw new Error('공개 기록을 불러오지 못했습니다. 잠시 후 다시 시도하세요.');
-  return {
-    weekStart: cycle.week_start,
-    submissionStatus: cycle.submission_status,
-    submittedAt: cycle.submitted_at,
-    reveals: (reveals ?? []).map((reveal) => ({
-      dayIndex: reveal.day_index,
-      state: reveal.state,
-      availableAt: reveal.available_at,
-      expiresAt: reveal.expires_at,
-      consumedAt: reveal.consumed_at,
-    })),
-  };
+// Existing Home and Submission callers now receive server-selected current state.
+export async function fetchCurrentWeeklyProgress(): Promise<WeeklyProgress> {
+  return ensureCurrentWeek();
 }
 
 export async function consumeDailyReveal(): Promise<number | null> {
