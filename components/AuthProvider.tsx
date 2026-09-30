@@ -5,6 +5,7 @@ import { signInWithPassword, signOutSession, signUpWithPassword } from '@/data/a
 import { getBackendConfigurationMessage, getSupabaseClient } from '@/lib/supabase';
 import { observeSession } from '@/lib/authSession';
 import { getAuthErrorMessage } from '@/domain/auth';
+import { disablePushRegistration } from '@/lib/pushRegistration';
 
 interface AuthContextValue {
   user: User | null;
@@ -51,7 +52,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return <AuthContext.Provider value={{ user: session?.user ?? null, session, isLoading, error,
     retryRestore: () => setAttempt((value) => value + 1),
-    signUp: signUpWithPassword, signIn: signInWithPassword, signOut: signOutSession }}>
+    signUp: signUpWithPassword, signIn: signInWithPassword, signOut: async () => {
+      if (session?.user) {
+        // A network failure must not block explicit sign-out. Local retry intent
+        // survives and is reconciled on the next authenticated session.
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        await Promise.race([disablePushRegistration(session.user.id).catch(() => {}),
+          new Promise<void>((resolve) => { timer = setTimeout(resolve, 5000); })]);
+        if (timer) clearTimeout(timer);
+      }
+      await signOutSession();
+    } }}>
     {children}
   </AuthContext.Provider>;
 }

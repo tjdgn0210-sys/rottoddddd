@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 import { ActivityIndicator, View } from 'react-native';
 import { AuthProvider, useAuth } from '@/components/AuthProvider';
+import { NotificationObserver } from '@/components/NotificationObserver';
 
 function AuthenticatedNavigator() {
   const { session, isLoading } = useAuth();
@@ -12,5 +13,5 @@ function AuthenticatedNavigator() {
 }
 
 export default function RootLayout() {
-  return <AuthProvider><AuthenticatedNavigator /></AuthProvider>;
+  return <AuthProvider><AuthenticatedNavigator /><NotificationObserver /></AuthProvider>;
 }
