@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { applyWeeklyPointsResult } from '../domain/points.ts';
-import { canTransitionRevealState, generateWeeklyNumbers, submitWeeklyNumbers } from '../domain/weekly.ts';
+import { canTransitionRevealState, generateWeeklyNumbers, getWeeklyCalendarContext, submitWeeklyNumbers } from '../domain/weekly.ts';
 
 const correct = [3, 8, 14, 22, 31, 45];
 
@@ -11,6 +11,15 @@ test('weekly generation returns six unique integers in the allowed range', () =>
   assert.equal(numbers.length, 6);
   assert.equal(new Set(numbers).size, 6);
   assert.ok(numbers.every((number) => Number.isInteger(number) && number >= 1 && number <= 45));
+});
+
+test('weekly day follows the backend Seoul boundary', () => {
+  const monday = getWeeklyCalendarContext(new Date('2026-09-27T16:00:00Z'));
+  assert.equal(monday.day, 1);
+  assert.equal(monday.weekStartsOn, '2026-09-28');
+  const sunday = getWeeklyCalendarContext(new Date('2026-09-26T16:00:00Z'));
+  assert.equal(sunday.day, null);
+  assert.equal(sunday.weekStartsOn, '2026-09-21');
 });
 
 test('reveal state machine accepts only forward edges and terminal states stay terminal', () => {

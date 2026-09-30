@@ -50,13 +50,14 @@ export interface WeeklyCalendarContext {
 }
 
 export function getWeeklyCalendarContext(date: Date): WeeklyCalendarContext {
-  const dayNumber = date.getDay() === 0 ? 7 : date.getDay();
-  const monday = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  monday.setDate(monday.getDate() - dayNumber + 1);
+  // Match the backend's Asia/Seoul weekly boundary for display and queries.
+  const seoulDate = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+  const dayNumber = seoulDate.getUTCDay() === 0 ? 7 : seoulDate.getUTCDay();
+  const monday = new Date(Date.UTC(seoulDate.getUTCFullYear(), seoulDate.getUTCMonth(), seoulDate.getUTCDate() - dayNumber + 1));
   return {
     day: dayNumber <= 6 ? (dayNumber as WeeklyDay) : null,
     dayNumber: dayNumber <= 6 ? dayNumber : null,
-    weekStartsOn: `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`,
+    weekStartsOn: `${monday.getUTCFullYear()}-${String(monday.getUTCMonth() + 1).padStart(2, '0')}-${String(monday.getUTCDate()).padStart(2, '0')}`,
     isRevealDay: dayNumber <= 6,
   };
 }
@@ -68,6 +69,14 @@ export type WeeklySubmission =
   | { accepted: false; reason: SubmissionRejection }
   | { accepted: true; attemptUsed: true; outcome: SubmissionOutcome };
 
+export function validateWeeklySubmissionInput(enteredNumbers: readonly number[]): SubmissionRejection | null {
+  if (enteredNumbers.length !== 6) return 'WRONG_COUNT';
+  if (!enteredNumbers.every(Number.isInteger)) return 'NOT_INTEGER';
+  if (!enteredNumbers.every((number) => number >= 1 && number <= 45)) return 'OUT_OF_RANGE';
+  if (new Set(enteredNumbers).size !== 6) return 'DUPLICATES';
+  return null;
+}
+
 export function submitWeeklyNumbers(
   correctNumbers: WeeklyNumbers,
   enteredNumbers: readonly number[],
@@ -76,10 +85,8 @@ export function submitWeeklyNumbers(
 ): WeeklySubmission {
   if (alreadySubmitted) return { accepted: false, reason: 'ALREADY_SUBMITTED' };
   if (!allSixRevealsConsumed) return { accepted: false, reason: 'NOT_READY' };
-  if (enteredNumbers.length !== 6) return { accepted: false, reason: 'WRONG_COUNT' };
-  if (!enteredNumbers.every(Number.isInteger)) return { accepted: false, reason: 'NOT_INTEGER' };
-  if (!enteredNumbers.every((number) => number >= 1 && number <= 45)) return { accepted: false, reason: 'OUT_OF_RANGE' };
-  if (new Set(enteredNumbers).size !== 6) return { accepted: false, reason: 'DUPLICATES' };
+  const invalidReason = validateWeeklySubmissionInput(enteredNumbers);
+  if (invalidReason) return { accepted: false, reason: invalidReason };
 
   const expected = new Set(correctNumbers);
   const outcome = enteredNumbers.every((number) => expected.has(number)) ? 'SUCCESS' : 'FAILURE';
