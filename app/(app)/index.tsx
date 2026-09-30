@@ -6,24 +6,40 @@ import { DEFAULT_CHARACTER } from '@/domain/characters';
 import { getWeeklyCalendarContext } from '@/domain/weekly';
 import { fetchCurrentWeeklyProgress, fetchUserProfile, type UserProfile, type WeeklyProgress } from '@/data/weeklyRepository';
 import { getBackendConfigurationMessage } from '@/lib/supabase';
+import { useAuth } from '@/components/AuthProvider';
 
 export default function HomeScreen() {
+  const { user, signOut } = useAuth();
   const context = getWeeklyCalendarContext(new Date());
   const configurationMessage = getBackendConfigurationMessage();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [progress, setProgress] = useState<WeeklyProgress | null>(null);
   const [message, setMessage] = useState<string | null>(configurationMessage);
+  const [profileMessage, setProfileMessage] = useState<string | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [attempt, setAttempt] = useState(0);
+  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
     if (configurationMessage) return;
     let active = true;
-    Promise.all([fetchUserProfile(), fetchCurrentWeeklyProgress()])
-      .then(([nextProfile, nextProgress]) => {
-        if (active) { setProfile(nextProfile); setProgress(nextProgress); setMessage(null); }
-      })
-      .catch((error: unknown) => { if (active) setMessage(error instanceof Error ? error.message : '주간 정보를 불러오지 못했습니다.'); });
+    setProfile(null); setProfileLoading(true); setProfileMessage(null);
+    fetchUserProfile().then((nextProfile) => { if (active) setProfile(nextProfile); })
+      .catch((error: unknown) => { if (active) setProfileMessage(error instanceof Error ? error.message : '계정 정보를 불러오지 못했습니다.'); })
+      .finally(() => { if (active) setProfileLoading(false); });
+    fetchCurrentWeeklyProgress().then((nextProgress) => {
+      if (active) { setProgress(nextProgress); setMessage(null); }
+    }).catch(() => { if (active) setMessage('주간 정보를 불러오지 못했습니다. 잠시 후 다시 시도하세요.'); });
     return () => { active = false; };
-  }, [configurationMessage]);
+  }, [configurationMessage, user?.id, attempt]);
+
+  const handleSignOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try { await signOut(); }
+    catch (error) { setMessage(error instanceof Error ? error.message : '로그아웃하지 못했습니다. 다시 시도하세요.'); }
+    finally { setSigningOut(false); }
+  };
 
   const todayReveal = progress?.reveals.find((reveal) => reveal.dayIndex === context.dayNumber);
   return (
@@ -36,8 +52,16 @@ export default function HomeScreen() {
         <Text style={mutedStyle}>다음 공개까지 · 시간표 연동 전</Text>
       </View>
       <View style={cardStyle}>
+        <Text style={mutedStyle}>{user?.email}</Text>
         <Text style={textStyle}>포인트 · {profile ? `${profile.pointBalance}P` : '—'}</Text>
+        <Text style={mutedStyle}>연속 성공 · {profile ? `${profile.currentSuccessStreak}주` : '—'}</Text>
+        {profileLoading && <Text style={mutedStyle}>계정 정보 불러오는 중…</Text>}
+        {profileMessage && <>
+          <Text accessibilityRole="alert" style={mutedStyle}>{profileMessage}</Text>
+          <Pressable accessibilityRole="button" onPress={() => setAttempt((value) => value + 1)}><Text style={textStyle}>다시 시도</Text></Pressable>
+        </>}
         <Text style={mutedStyle}>현재 캐릭터 · {DEFAULT_CHARACTER.name} (기본)</Text>
+        <Pressable accessibilityRole="button" disabled={signingOut} onPress={() => void handleSignOut()}><Text style={textStyle}>{signingOut ? '로그아웃 중…' : '로그아웃'}</Text></Pressable>
       </View>
       {message && <View style={cardStyle}><Text style={mutedStyle}>{message}</Text></View>}
       <Link href="/reveal" asChild><Pressable style={buttonStyle}><Text style={styles.buttonText}>공개 화면 보기</Text></Pressable></Link>

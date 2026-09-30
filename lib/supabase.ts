@@ -1,14 +1,14 @@
 import 'react-native-url-polyfill/auto';
-import 'expo-sqlite/localStorage/install';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { sessionStorage } from '@/lib/sessionStorage';
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const publicKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const publicKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 let client: SupabaseClient | null = null;
 
 export function getBackendConfigurationMessage(): string | null {
   if (!url || !publicKey) {
-    return 'Supabase 설정이 없습니다. .env의 EXPO_PUBLIC_SUPABASE_URL과 EXPO_PUBLIC_SUPABASE_ANON_KEY를 설정하세요.';
+    return 'Supabase 설정이 없습니다. .env의 EXPO_PUBLIC_SUPABASE_URL과 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY를 설정하세요.';
   }
   if (url.includes('your-project.supabase.co') || publicKey.startsWith('your-public-')) {
     return '.env.example의 예시 값을 실제 Supabase 프로젝트 URL과 공개 키로 바꿔 주세요.';
@@ -30,7 +30,7 @@ export function getSupabaseClient(): SupabaseClient {
   if (!client) {
     client = createClient(url!, publicKey!, {
       auth: {
-        storage: typeof localStorage === 'undefined' ? undefined : localStorage,
+        storage: sessionStorage,
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: false,
